@@ -16,8 +16,32 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "lcdpulse.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+
 int main (int argc, char *argv[])
 {
+  CLCDPulse lcdpulse(argc, argv);
+
+  for(;;)
+  {
+    if (!lcdpulse.Setup())
+    {
+      printf("Setup failed, retrying in 10 seconds\n");
+      lcdpulse.Cleanup();
+      sleep(10);
+      continue;
+    }
+
+    lcdpulse.Run();
+
+    sleep(1); //prevent busy looping in case Run() fails quickly after Setup() succeeds
+
+    lcdpulse.Cleanup();
+  }
+
   return 0;
 }
 
