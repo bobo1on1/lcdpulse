@@ -27,6 +27,7 @@
 #include <netdb.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 
 using namespace std;
 
@@ -170,6 +171,12 @@ bool CLCDPulse::Setup()
   pa_operation_unref(o);
 
   pa_threaded_mainloop_unlock(m_mainloop);
+
+  //block SIGPIPE, which can get thrown when dealing with a closed socket
+  sigset_t sigset;
+  sigemptyset(&sigset);
+  sigaddset(&sigset, SIGPIPE);
+  sigprocmask(SIG_BLOCK, &sigset, NULL);
 
   //look up the host
   struct addrinfo *addrinfo = NULL;
