@@ -234,7 +234,14 @@ void CLCDPulse::Run()
 {
   for(;;)
   {
-    PurgeSocket();
+    try
+    {
+      PurgeSocket();
+    }
+    catch(...)
+    {
+      return;
+    }
 
     //wait until the pulseaudio volume changes
     pa_threaded_mainloop_lock(m_mainloop);
