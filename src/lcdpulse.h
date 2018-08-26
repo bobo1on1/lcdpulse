@@ -50,7 +50,8 @@ class CLCDPulse
     void        Daemonize();
     void        SetNonBlock(bool nonblock);
     void        PurgeSocket();
-    void        WriteCommand(const std::string& cmd);
+    bool        WaitSuccess();
+    void        WriteCommand(const std::string& cmd, bool waitsuccess = true);
 
     static void SStateCallback(pa_context* c, void *userdata);
     void        StateCallback(pa_context* c);

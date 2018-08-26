@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <poll.h>
 
 using namespace std;
 
@@ -219,7 +220,7 @@ bool CLCDPulse::Setup()
   //set up a screen with a string widget on LCDProc
   try
   {
-    WriteCommand("hello\n");
+    WriteCommand("hello\n", false);
     WriteCommand("client_set -name lcdpulse\n");
     WriteCommand("screen_add volumescr\n");
     WriteCommand("screen_set volumescr -heartbeat off\n");
@@ -468,18 +469,13 @@ void CLCDPulse::SetNonBlock(bool nonblock)
 
 void CLCDPulse::PurgeSocket()
 {
-  //read any data from the LCDProc socket, it's currently not used for anything
+  //read any data left on the lcdproc socket
 
   SetNonBlock(true);
 
   char buf[1024];
   int returnv;
-  while ((returnv = read(m_sock, buf, sizeof(buf))) > 0)
-  {
-    printf("LCDProc read: ");
-    for (int i = 0; i < returnv; i++)
-      putc(buf[i], stdout);
-  }
+  while ((returnv = read(m_sock, buf, sizeof(buf))) > 0);
 
   if (returnv < 0 && (errno != EAGAIN && errno != EINTR))
   {
@@ -490,7 +486,59 @@ void CLCDPulse::PurgeSocket()
   SetNonBlock(false);
 }
 
-void CLCDPulse::WriteCommand(const std::string& cmd)
+//wait 5 seconds for LCDd to send success\n back
+bool CLCDPulse::WaitSuccess()
+{
+  SetNonBlock(true);
+
+  for(;;)
+  {
+    pollfd sockfd = {};
+    sockfd.fd = m_sock;
+    sockfd.events = POLLIN;
+
+    int returnv = poll(&sockfd, 1, 5000);
+    if (returnv == -1)
+    {
+      printf("LCDProc: error calling poll() on socket: %s\n", strerror(errno));
+      SetNonBlock(false);
+      return false;
+    }
+
+    if (sockfd.revents & POLLIN)
+    {
+      char buf[1024] = {};
+      int pos = 0;
+
+      while (pos < (int)sizeof(buf) - 1 && (returnv = read(m_sock, buf + pos, sizeof(buf) - pos - 1)) > 0)
+        pos += returnv;
+
+      if (returnv == 0)
+      { //socket closed
+        SetNonBlock(false);
+        return false;
+      }
+
+      buf[pos] = 0;
+
+      if (strstr(buf, "success\n") != NULL)
+      {
+        SetNonBlock(false);
+        return true;
+      }
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  SetNonBlock(false);
+
+  return false;
+}
+
+void CLCDPulse::WriteCommand(const std::string& cmd, bool waitsuccess /*= true*/)
 {
   PurgeSocket();
 
@@ -510,6 +558,9 @@ void CLCDPulse::WriteCommand(const std::string& cmd)
       throw errno;
     }
   }
+
+  if (waitsuccess && !WaitSuccess())
+    printf("LCDProc: Failed command %s", cmd.c_str());
 
   PurgeSocket();
 }
